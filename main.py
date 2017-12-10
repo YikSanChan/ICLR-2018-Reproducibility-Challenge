@@ -141,7 +141,24 @@ def evaluate(data_source):
         hidden = repackage_hidden(hidden)
     return total_loss[0] / len(data_source)
 
+def add_structure_glasso(var, coupled_var, couple_split_num=2):
 
+    var1 = var.transpose(0, 1)
+    coupled_var1 = coupled_var.transpose(0, 1)
+
+    t1 = var1.pow(2)
+    t1_col_sum = t1.sum(dim=0)
+    t1_col_sum1, t1_col_sum2, t1_col_sum3, t1_col_sum4 = t1_col_sum.chunk(4)
+    t1_row_sum = t1.sum(dim=1)
+    _, t1_row_sum2 = t1_row_sum.chunk(2)
+    t2 = coupled_var1.pow(2)
+    t2_row_sum = t2.sum(dim=1)
+    t2_row_sum1 = t2_row_sum.chunk(couple_split_num)[0]
+    reg_sum = t1_row_sum2 + \
+              t1_col_sum1 + t1_col_sum2 + t1_col_sum3 + t1_col_sum4 + \
+              t2_row_sum1 + \
+              1e-8
+    return reg_sum.pow(1/2.).sum()
 def train():
     # Turn on training mode which enables dropout.
     model.train()
