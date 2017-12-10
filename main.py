@@ -55,7 +55,6 @@ if torch.cuda.is_available():
 ###############################################################################
 # Load data
 ###############################################################################
-weight_decay=0.00001
 
 corpus = data.Corpus(args.data)
 
@@ -178,15 +177,23 @@ def train():
 
         weight_l0 = torch.cat((model.rnn.weight_ih_l0, model.rnn.weight_hh_l0), 1)  # shape (4*hidden_size x input_size)
         weight_l1 = torch.cat((model.rnn.weight_ih_l1, model.rnn.weight_hh_l1), 1)
-        if args.cuda:
-            dummy1=Variable(torch.cuda.FloatTensor(weight_l0.size()).zero_(),requires_grad=False)
-            dummy2=Variable(torch.cuda.FloatTensor(weight_l1.size()).zero_(),requires_grad=False)
-        else:
-            dummy1=Variable(torch.FloatTensor(weight_l0.size()).zero_(),requires_grad=False)
-            dummy2=Variable(torch.FloatTensor(weight_l1.size()).zero_(),requires_grad=False)
-        loss+=(weight_decay*l1(weight_l0,dummy1))
-        loss+=(weight_decay*l1(weight_l1,dummy2))
-        loss.backward()
+        weight_l2 = model.decoder.weight # decoder layer weight of shape (out_features x in_features)
+        
+        if l1_reg:
+            if args.cuda:
+                dummy1 = Variable(torch.cuda.FloatTensor(weight_l0.size()).zero_(),requires_grad=False)
+                dummy2 = Variable(torch.cuda.FloatTensor(weight_l1.size()).zero_(),requires_grad=False)
+            else:
+                dummy1 = Variable(torch.FloatTensor(weight_l0.size()).zero_(),requires_grad=False)
+                dummy2 = Variable(torch.FloatTensor(weight_l1.size()).zero_(),requires_grad=False)
+            loss += (0.00001*l1(weight_l0,dummy1)) + \
+                    (0.00001*l1(weight_l1,dummy2))
+        
+        structure_glasso_reg = 0.00245 * add_structure_glasso(weight_l0, weight_l1, 2) + \
+                               0.00245 * add_structure_glasso(weight_l1, weight_l2, 1)
+        
+        final = loss + structure_glasso_reg
+        final.backward()
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
@@ -206,6 +213,7 @@ def train():
             start_time = time.time()
 
 # Loop over epochs.
+l1_reg=False
 lr = args.lr
 best_val_loss = None
 
