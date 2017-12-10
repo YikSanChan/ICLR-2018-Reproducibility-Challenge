@@ -162,6 +162,7 @@ def train():
     # Turn on training mode which enables dropout.
     model.train()
     total_loss = 0
+    reg_loss = 0
     start_time = time.time()
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(args.batch_size)
@@ -192,7 +193,7 @@ def train():
         structure_glasso_reg = 0.00245 * add_structure_glasso(weight_l0, weight_l1, 2) + \
                                0.00245 * add_structure_glasso(weight_l1, weight_l2, 1)
         
-        final = loss + structure_glasso_reg
+        final = (loss * args.bptt) + structure_glasso_reg
         final.backward()
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
@@ -201,15 +202,17 @@ def train():
             p.data.add_(-lr, p.grad.data)
 
         total_loss += loss.data
-
+        reg_loss += structure_glasso_reg.data
         if batch % args.log_interval == 0 and batch > 0:
             cur_loss = total_loss[0] / args.log_interval
+            cur_reg_loss= reg_loss[0] / args.log_interval
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
-                    'loss {:5.2f} | ppl {:8.2f}'.format(
+                    'loss {:5.2f} | ppl {:8.2f} | reg_loss {:5.2f}'.format(
                 epoch, batch, len(train_data) // args.bptt, lr,
-                elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
+                elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss),cur_reg_loss))
             total_loss = 0
+            reg_loss = 0
             start_time = time.time()
 
 # Loop over epochs.
